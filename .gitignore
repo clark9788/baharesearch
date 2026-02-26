@@ -1,0 +1,39 @@
+# =========================
+# Build artifacts
+# =========================
+target/
+
+# =========================
+# Local runtime corpus outputs
+# (keep curated source files)
+# =========================
+data/corpus/*.db
+data/corpus/*.db-wal
+data/corpus/*.db-shm
+data/corpus/snapshots/
+data/corpus/ingest/
+
+# Optional generated exports
+data/corpus/passages_all.csv
+data/corpus/passages_sample.csv
+
+# =========================
+# Secrets / local config
+# =========================
+*.properties
+!*.example.properties
+bahai-research.properties
+
+# =========================
+# IDE / OS noise
+# =========================
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# NOTE:
+# We are intentionally NOT ignoring:
+# data/corpus/curated/en/**
+# so curated source files remain tracked in git.
