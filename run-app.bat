@@ -13,4 +13,9 @@ if not exist "%KEY_PATH%" (
   exit /b 1
 )
 
-java -jar "%~dp0target\BahaiResearch-1.0.0-SNAPSHOT-all.jar"
+set "JAVA_EXE=%~dp0runtime\bin\java.exe"
+if not exist "%JAVA_EXE%" (
+  set "JAVA_EXE=java"
+)
+
+"%JAVA_EXE%" -jar "%~dp0target\BahaiResearch-1.0.0-SNAPSHOT-all.jar"

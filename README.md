@@ -30,16 +30,60 @@ Desktop research assistant for finding sourced Bahá’í quotes from a **local 
 
 ## Build
 
-From project root:
+All commands below are run from project root.
+
+### First-time build run (new machine / clean setup)
+
+1) Build app jar:
 
 ```cmd
 mvn -DskipTests package
 ```
 
-Output:
+2) (Optional but recommended for end-user distribution) Build private Java runtime:
+
+```cmd
+build-runtime-image.bat
+```
+
+3) (Optional for release packaging) Build DB-only runtime package:
+
+```cmd
+package-runtime-db-only.bat
+```
+
+### Follow-on build runs (normal development/release updates)
+
+Most updates only need:
+
+```cmd
+mvn -DskipTests package
+package-runtime-db-only.bat
+```
+
+You only need to rerun `build-runtime-image.bat` when:
+- Java version changes,
+- runtime image options/modules change,
+- or `runtime/` is missing/corrupted.
+
+### Output artifacts
+
+Primary jar:
+
+```cmd
+mvn -DskipTests package
+```
+
+produces:
 
 ```text
 target/BahaiResearch-1.0.0-SNAPSHOT-all.jar
+```
+
+Packaging script (if used) produces:
+
+```text
+dist/BahaiResearch-runtime-db-only/
 ```
 
 ---
@@ -55,9 +99,9 @@ gemini.apiKey=YOUR_API_KEY
 gemini.model=gemini-2.5-flash
 
 research.requiredSite=https://www.bahai.org/library/
-research.localOnlyMode=true
+research.localOnlyMode=true                      ** uses local database when true, uses local and web search when false
 research.debugIntent=false
-research.noResultsText=No Results
+research.noResultsText=No Results                ** text for No Results in output
 research.maxQuotes=8
 research.requestTimeoutSeconds=90
 
@@ -88,13 +132,13 @@ corpus.curated.manifestFileName=manifest.csv
 ### Option A: direct command
 
 ```cmd
-set KEY_PATH=D:\path\to\bahai-research.properties && java -jar target\BahaiResearch-1.0.0-SNAPSHOT-all.jar
+set KEY_PATH=c:\path\to\bahai-research.properties && java -jar target\BahaiResearch-1.0.0-SNAPSHOT-all.jar
 ```
 
 ### Option B: helper script
 
 ```cmd
-run-app.bat D:\path\to\bahai-research.properties
+run-app.bat c:\path\to\bahai-research.properties
 ```
 
 ---
@@ -110,7 +154,7 @@ For end-user runtime package, include:
 
 Recommended runtime flags:
 
-- `corpus.autoIngestIfEmpty=false`
+- `corpus.autoIngestIfEmpty=true`
 - `corpus.forceReingest=false`
 - `research.localOnlyMode=true`
 
@@ -139,3 +183,30 @@ git push
 
 - `DEPLOYMENT.md` – packaging and run details
 - `src/main/java/com/bahairesearch/config/Search_flow.md` – query/search flow notes
+
+Version 2 notes:
+Rough effort estimate:
+
+- __Core v2 (safe split, no blending):__ low-to-medium effort
+- __Polished v2 (ranking, source quality controls, better UI toggles):__ medium effort
+
+The key is design:
+
+1. keep authoritative quotes pipeline exactly as-is,
+2. add optional commentary retrieval pipeline,
+3. render in separate section with explicit label.
+
+So yes — manageable, and your current local-first design makes it much easier and safer to add. If you want, I can draft a v2 implementation plan in phases (MVP → hardened).Not too difficult — __very doable for v2__ if you keep your current architecture and add commentary as a separate lane.
+
+Rough effort estimate:
+
+- __Core v2 (safe split, no blending):__ low-to-medium effort
+- __Polished v2 (ranking, source quality controls, better UI toggles):__ medium effort
+
+The key is design:
+
+1. keep authoritative quotes pipeline exactly as-is,
+2. add optional commentary retrieval pipeline,
+3. render in separate section with explicit label.
+
+

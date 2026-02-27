@@ -73,6 +73,59 @@ run-app.bat D:\path\to\keys.properties
 
 ---
 
+## DB-only runtime package (recommended for your current release)
+
+If you want to distribute **prebuilt `corpus.db`** and **no curated source files**, use:
+
+```cmd
+package-runtime-db-only.bat
+```
+
+Optional: build private Java runtime first (so users do not need Java installed):
+
+```cmd
+build-runtime-image.bat
+```
+
+Then run packaging command above. If `runtime\bin\java.exe` exists, it is included automatically.
+
+Output package folder:
+
+```text
+dist\BahaiResearch-runtime-db-only\
+```
+
+It includes:
+- `target\BahaiResearch-1.0.0-SNAPSHOT-all.jar`
+- `run-app.bat`
+- `data\corpus\corpus.db` (plus `-wal/-shm` if present)
+- `bahai-research.properties` (local-only default profile)
+- optional `runtime\` (private Java runtime, if built)
+
+### Default behavior in packaged properties
+
+- Works with no internet in local-only mode
+- No API key required for local corpus search
+- AI fallback can be enabled later by user by adding `gemini.apiKey` and setting:
+
+```properties
+research.localOnlyMode=false
+```
+
+### Run packaged app
+
+```cmd
+run-app.bat D:\path\to\dist\BahaiResearch-runtime-db-only\bahai-research.properties
+```
+
+`run-app.bat` launch order:
+1. Uses bundled `runtime\bin\java.exe` if present.
+2. Otherwise falls back to system `java` on PATH.
+
+This does **not** modify system `JAVA_HOME` or global `PATH`.
+
+---
+
 ## Notes
 
 - Build warnings from `maven-shade-plugin` about overlapping resources are expected for this JavaFX setup and do not prevent running.
