@@ -68,7 +68,7 @@ set KEY_PATH=D:\path\to\keys.properties && java -jar D:\AI-Python\BahaiResearch\
 You can also use `run-app.bat` (included in project root):
 
 ```cmd
-run-app.bat D:\path\to\keys.properties
+run-app.bat C:\path\to\keys.properties
 ```
 
 ---
@@ -106,16 +106,17 @@ It includes:
 
 - Works with no internet in local-only mode
 - No API key required for local corpus search
-- AI fallback can be enabled later by user by adding `gemini.apiKey` and setting:
+- AI fallback can be enabled later by user by adding `gemini.apiKey` 
 
 ```properties
-research.localOnlyMode=false
+research.localOnlyMode=true(default) This keeps all search local, but with an apiKey, Ai will help with Prompt interpretation and intelligent ordering of returned quotes.
+research.localOnlyMode=false. This will allow AI to search out quotes on the internet and give some interpretation of the prompt. Unfortunately, this has produced hallucinations in the past, but the AI might get better over time.
 ```
 
 ### Run packaged app
 
 ```cmd
-run-app.bat D:\path\to\dist\BahaiResearch-runtime-db-only\bahai-research.properties
+run-app.bat C:\path\to\dist\BahaiResearch-runtime-db-only\bahai-research.properties
 ```
 
 `run-app.bat` launch order:
