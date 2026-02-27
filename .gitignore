@@ -16,6 +16,7 @@ data/corpus/ingest/
 # Optional generated exports
 data/corpus/passages_all.csv
 data/corpus/passages_sample.csv
+data/corpus/documents.csv
 
 # =========================
 # Secrets / local config
@@ -25,14 +26,13 @@ data/corpus/passages_sample.csv
 bahai-research.properties
 
 # =========================
-# IDE / OS noise Test Files
+# IDE / OS noise 
 # =========================
 .vscode/
 .idea/
 *.iml
 .DS_Store
 Thumbs.db
-*.csv
 
 # NOTE:
 # We are intentionally NOT ignoring:
