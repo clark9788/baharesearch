@@ -25,13 +25,14 @@ data/corpus/passages_sample.csv
 bahai-research.properties
 
 # =========================
-# IDE / OS noise
+# IDE / OS noise Test Files
 # =========================
 .vscode/
 .idea/
 *.iml
 .DS_Store
 Thumbs.db
+*.csv
 
 # NOTE:
 # We are intentionally NOT ignoring:

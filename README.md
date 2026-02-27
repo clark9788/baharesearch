@@ -4,11 +4,18 @@ Desktop research assistant for finding sourced Bahá’í quotes from a **local 
 
 ## What this project does
 
-- Uses a local SQLite corpus for quote retrieval
+- Uses a local SQLite corpus for quote retrieval. Source titles are from baha.org/library
 - Supports curated source ingest (DOCX/HTML/PDF) from `data/corpus/curated/en`
 - Returns structured results (quote, author, book, locator/page, URL)
 - Can run in local-only mode (no web lookup at query time)
-
+- Orginally was set up to use Gemini AI and look for quotes on the web, but there were hallucinations
+- BahaResearchofResults.docx has a list of quotes returned when the AI was producing quotes from the web
+- AI now evaluates research input and ranks words for search. It also tries to guess a good source -- author, title
+- AI also ranks the returned quotes in order of most relevant
+- AI can be returned to web search by setting research.localOnlyMode=false in .properties file
+- Future plans to research other AI api's to see if they perform better. 
+- Page indicator are just relative locations in the file, not tied to any printed resource. Paragraph numbers appear in the text when available.
+- Used chatgpt-5.3-codex for original design and coding. Used sonnet-4.6 for improvements to search algorithm. 
 ---
 
 ## Tech stack
