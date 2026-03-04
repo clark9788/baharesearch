@@ -8,7 +8,7 @@ set "PACKAGE_NAME=%~1"
 if "%PACKAGE_NAME%"=="" set "PACKAGE_NAME=BahaiResearch-runtime-db-only"
 
 set "ROOT=%~dp0"
-set "OUT=%ROOT%dist\%PACKAGE_NAME%"
+set "OUT=%ROOT%dist\db-only\%PACKAGE_NAME%"
 
 echo [1/5] Preparing output folder: %OUT%
 if exist "%OUT%" rmdir /s /q "%OUT%"

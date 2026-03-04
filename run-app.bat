@@ -1,15 +1,32 @@
 @echo off
 setlocal
 
-if "%~1"=="" (
-  echo Usage: run-app.bat ^<full-path-to-keys.properties^>
-  exit /b 1
+REM Resolution order for KEY_PATH:
+REM 1) Existing KEY_PATH environment variable (preferred for secret key storage)
+REM 2) Optional first argument to this script
+REM 3) Local packaged file: .\bahai-research.properties
+
+if defined KEY_PATH goto :validate_key_path
+
+if not "%~1"=="" (
+  set "KEY_PATH=%~1"
+  goto :validate_key_path
 )
 
-set "KEY_PATH=%~1"
+set "DEFAULT_LOCAL_KEY_PATH=%~dp0bahai-research.properties"
+if exist "%DEFAULT_LOCAL_KEY_PATH%" (
+  set "KEY_PATH=%DEFAULT_LOCAL_KEY_PATH%"
+  goto :validate_key_path
+)
 
+echo ERROR: No KEY_PATH was provided.
+echo Set environment variable KEY_PATH, or pass a properties path argument,
+echo or place bahai-research.properties next to run-app.bat.
+exit /b 1
+
+:validate_key_path
 if not exist "%KEY_PATH%" (
-  echo KEY_PATH file not found: %KEY_PATH%
+  echo ERROR: KEY_PATH file not found: %KEY_PATH%
   exit /b 1
 )
 

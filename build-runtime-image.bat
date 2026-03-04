@@ -21,7 +21,7 @@ echo Removing existing runtime folder (if any): %OUT%
 if exist "%OUT%" rmdir /s /q "%OUT%"
 
 echo Building private runtime image...
-jlink --add-modules java.base,java.desktop,java.logging,java.net.http,java.sql,jdk.unsupported --output "%OUT%" --strip-debug --no-man-pages --no-header-files --compress=2
+jlink --add-modules java.base,java.desktop,java.logging,java.net.http,java.sql,jdk.unsupported,jdk.crypto.ec --output "%OUT%" --strip-debug --no-man-pages --no-header-files --compress=2
 if errorlevel 1 (
   echo ERROR: jlink runtime build failed.
   exit /b 1
