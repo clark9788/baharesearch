@@ -600,7 +600,10 @@ public final class CorpusIngestService {
         String normalized = xml
             .replaceAll("(?s)<w:tab[^>]*/>", " ")
             .replaceAll("(?s)</w:p>", "\n")
-            .replaceAll("(?s)<[^>]+>", " ");
+            // IMPORTANT: remove XML tags without adding spaces.
+            // If tags are replaced with spaces, DOCX runs that split a single word
+            // (e.g., "Manif" + "estations") become "Manif estations".
+            .replaceAll("(?s)<[^>]+>", "");
 
         List<String> rows = new ArrayList<>();
         for (String row : normalized.split("\\R+")) {
