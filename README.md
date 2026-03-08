@@ -46,10 +46,13 @@ mvn -DskipTests package
 build-runtime-image.bat
 ```
 
-3) (Optional for release packaging) Build DB-only runtime package:
+3) (Optional for release packaging):
 
 ```cmd
 package-runtime-db-only.bat
+```cmd
+package-runtime-source-only.bat
+
 ```
 
 ### Follow-on build runs (normal development/release updates)
@@ -59,6 +62,7 @@ Most updates only need:
 ```cmd
 mvn -DskipTests package
 package-runtime-db-only.bat
+package-runtime-source-only.bat
 ```
 
 You only need to rerun `build-runtime-image.bat` when:
@@ -84,6 +88,7 @@ Packaging script (if used) produces:
 
 ```text
 dist/BahaiResearch-runtime-db-only/
+dist/BahaiResearch-runtime-source-only/
 ```
 
 ---
