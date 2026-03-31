@@ -26,7 +26,7 @@ Example `keys.properties`:
 gemini.apiKey=YOUR_API_KEY
 gemini.model=gemini-2.5-flash
 research.requiredSite=https://www.bahai.org/library/
-research.localOnlyMode=true
+research.localOnlyMode=true.
 research.noResultsText=No Results
 research.promptBoilerplate=Return quotes from primary Bahá’í scripture only. For each quote include author, book title, and paragraph or page number.
 research.maxQuotes=8
