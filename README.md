@@ -116,7 +116,7 @@ corpus.sourceBaseUrl=https://www.bahai.org
 corpus.ingestSeedUrl=https://www.bahai.org/library/
 corpus.ingestMaxPages=5000
 corpus.ingestRequestDelayMillis=150
-corpus.minPassageLength=160
+corpus.minPassageLength=80
 
 corpus.autoIngestIfEmpty=false
 corpus.forceReingest=false

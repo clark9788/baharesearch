@@ -227,9 +227,12 @@ public class BahaiResearch extends Application {
     }
 
     private VBox buildQuoteCard(int number, QuoteResult quote) {
-        Label quoteLabel = new Label(number + ") \u201c" + quote.quote() + "\u201d");
+        TextArea quoteLabel = new TextArea(number + ") \u201c" + quote.quote() + "\u201d");
+        quoteLabel.setEditable(false);
         quoteLabel.setWrapText(true);
-        quoteLabel.setStyle("-fx-font-style: italic;");
+        quoteLabel.setStyle("-fx-font-style: italic; -fx-background-color: transparent;");
+        quoteLabel.setPrefRowCount(3);
+        quoteLabel.setMaxHeight(Double.MAX_VALUE);
 
         Label authorLabel = new Label("   Author: " + quote.author());
         Label bookLabel   = new Label("   Book: " + quote.bookTitle());

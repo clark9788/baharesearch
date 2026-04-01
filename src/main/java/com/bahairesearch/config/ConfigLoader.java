@@ -58,7 +58,7 @@ public final class ConfigLoader {
     private static final String DEFAULT_CORPUS_INGEST_SEED_URL = "https://www.bahai.org/library/";
     private static final int DEFAULT_CORPUS_INGEST_MAX_PAGES = 200;
     private static final int DEFAULT_CORPUS_INGEST_DELAY_MS = 150;
-    private static final int DEFAULT_CORPUS_MIN_PASSAGE_LENGTH = 160;
+    private static final int DEFAULT_CORPUS_MIN_PASSAGE_LENGTH = 80;
     private static final boolean DEFAULT_CORPUS_AUTO_INGEST_IF_EMPTY = false;
     private static final boolean DEFAULT_CORPUS_FORCE_REINGEST = false;
     private static final boolean DEFAULT_CORPUS_CURATED_INGEST_ENABLED = false;

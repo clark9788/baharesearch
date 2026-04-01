@@ -1,3 +1,4 @@
+************* We have now added file links to the source files with an active url link, so the source files are now required ************
 let's talk deployment again. I'm getting close. I was thinking I would rather deploy with the title files rather than corpus.db*. My reasoning is that those who would use this program might appreciate having the bahai.org/library texts downloaded. They might use them to get the full quotes or look at context surrounding the quote. Do you see a downside to that approach? I could set corpus.autoIngestIfEmpty = true by default. Thoughts?
 
 I think your idea is strong, and for your audience it can be a good default — __with one adjustment__.

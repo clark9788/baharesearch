@@ -112,15 +112,32 @@ public final class LocalCorpusSearchService {
                 retrievalPoolSize,
                 requiredAuthor,
                 explicitTitle,
-                requestedBookTokens,
-                intent.knownPhrase()
+                requestedBookTokens
             );
             logCount(appConfig, "hits", hits.size());
 
             List<CorpusSearchHit> filtered = filterByRequestedAuthor(requiredAuthor, hits);
             List<CorpusSearchHit> bookScoped = filterByRequestedBook(filtered, requestedBookTokens);
             List<CorpusSearchHit> topical = filterByContentTerms(bookScoped, conceptTerms);
-            logCount(appConfig, "after author/book/content filters", topical.size());
+
+            // Phrase searches — always run, independent of AI/API key.
+            // Phrase hits use score=-99999 so they sort before qualityBand ordering and are
+            // never displaced by longer passages in rankForDisplay.
+            // IMPORTANT: phrase hits are merged FIRST so their score survives deduplication.
+            // If HW #5 (short passage) appears in both FTS results and phrase results,
+            // mergeHits keeps the first-seen version — we want the phrase version (-99999),
+            // not the FTS version (BM25 ~-5) which would be buried behind band-0 passages.
+            List<CorpusSearchHit> combinedPhraseHits = new ArrayList<>(fetchPhraseHits(
+                corpusPaths, topic, retrievalPoolSize,
+                requiredAuthor, explicitTitle, requestedBookTokens));
+            if (intent.knownPhrase() != null && !intent.knownPhrase().isBlank()) {
+                combinedPhraseHits = mergeHits(combinedPhraseHits, fetchPhraseHits(
+                    corpusPaths, intent.knownPhrase(), retrievalPoolSize,
+                    requiredAuthor, explicitTitle, requestedBookTokens));
+            }
+            // Phrase hits first, then FTS hits fill in non-duplicates
+            topical = mergeHits(combinedPhraseHits, topical);
+            logCount(appConfig, "after phrase merge", topical.size());
 
             if (!requestedBookTokens.isEmpty() && topical.size() < requestedQuotes) {
                 List<CorpusSearchHit> additionalBookScopedHits = findAdditionalBookScopedHits(
@@ -161,7 +178,7 @@ public final class LocalCorpusSearchService {
                     List<CorpusSearchHit> conceptHits = findHits(
                         corpusPaths, conceptOrFtsQuery, conceptOrFtsQuery,
                         retrievalPoolSize, requiredAuthor, explicitTitle,
-                        List.of(), intent.knownPhrase()
+                        List.of()
                     );
                     logCount(appConfig, "semantic fallback conceptHits", conceptHits.size());
                     if (!conceptHits.isEmpty()) {
@@ -302,6 +319,21 @@ public final class LocalCorpusSearchService {
     private static List<CorpusSearchHit> rankForDisplay(List<CorpusSearchHit> hits, String requiredAuthor) {
         return hits.stream()
             .sorted((left, right) -> {
+                // Phrase hits (score <= -99990) always sort first — explicit LIKE matches.
+                boolean leftIsPhrase  = left.score()  <= -99990;
+                boolean rightIsPhrase = right.score() <= -99990;
+                if (leftIsPhrase != rightIsPhrase) {
+                    return leftIsPhrase ? -1 : 1;
+                }
+                // Among multiple phrase hits, prefer shorter passages. A short passage where
+                // the query covers most of the text is a more precise match than a long passage
+                // that incidentally contains the query words in sequence.
+                if (leftIsPhrase) {
+                    int leftLen  = left.quote()  == null ? 0 : left.quote().length();
+                    int rightLen = right.quote() == null ? 0 : right.quote().length();
+                    return Integer.compare(leftLen, rightLen);
+                }
+
                 int leftSourcePriority = sourcePriority(left, requiredAuthor);
                 int rightSourcePriority = sourcePriority(right, requiredAuthor);
                 if (leftSourcePriority != rightSourcePriority) {
@@ -419,7 +451,7 @@ public final class LocalCorpusSearchService {
                 d.title,
                 p.locator,
                 d.canonical_url,
-                9999.0 AS score
+                -99999.0 AS score
             FROM passages p
             JOIN documents d ON d.doc_id = p.doc_id
             WHERE lower(p.text_content) LIKE ?
@@ -437,7 +469,7 @@ public final class LocalCorpusSearchService {
             + "    d.title,\n"
             + "    p.locator,\n"
             + "    d.canonical_url,\n"
-            + "    9998.0 AS score\n"
+            + "    -99998.0 AS score\n"
             + "FROM passages p\n"
             + "JOIN documents d ON d.doc_id = p.doc_id\n"
             + "WHERE 1=1\n"
@@ -456,8 +488,7 @@ public final class LocalCorpusSearchService {
         int limit,
         String requiredAuthor,
         String explicitTitle,
-        List<String> requestedBookTokens,
-        String knownPhrase
+        List<String> requestedBookTokens
     ) {
         boolean authorScoped = requiredAuthor != null && !requiredAuthor.isBlank();
         boolean titleScoped  = explicitTitle  != null && !explicitTitle.isBlank();
@@ -478,18 +509,6 @@ public final class LocalCorpusSearchService {
 
                 if (!requestedBookTokens.isEmpty()) {
                     hits = filterByRequestedBook(hits, requestedBookTokens);
-                }
-
-                if (knownPhrase != null && !knownPhrase.isBlank()) {
-                    List<CorpusSearchHit> phraseHits = findKnownPhraseHits(
-                        connection,
-                        knownPhrase,
-                        limit,
-                        requiredAuthor,
-                        explicitTitle,
-                        requestedBookTokens
-                    );
-                    hits = mergeHits(hits, phraseHits);
                 }
 
                 return hits.stream().limit(Math.max(1, limit)).toList();
@@ -547,6 +566,22 @@ public final class LocalCorpusSearchService {
             }
         }
         return hits;
+    }
+
+    private static List<CorpusSearchHit> fetchPhraseHits(
+        CorpusPaths corpusPaths,
+        String knownPhrase,
+        int limit,
+        String requiredAuthor,
+        String explicitTitle,
+        List<String> requestedBookTokens
+    ) {
+        try (Connection connection = CorpusConnectionFactory.open(corpusPaths)) {
+            return findKnownPhraseHits(connection, knownPhrase, limit,
+                requiredAuthor, explicitTitle, requestedBookTokens);
+        } catch (SQLException exception) {
+            return List.of();
+        }
     }
 
     private static List<CorpusSearchHit> findKnownPhraseHits(
