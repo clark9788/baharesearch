@@ -31,8 +31,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Queue;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -41,15 +39,6 @@ import java.util.zip.ZipInputStream;
  */
 public final class CorpusIngestService {
 
-    private static final Pattern COMPILATION_ITEM_HEADER_PATTERN =
-        Pattern.compile("\\([^\\)]{5,500}\\)\\s*\\[\\s*\\d{1,4}\\s*\\]");
-    private static final Pattern COMPILATION_ITEM_MARKER_PATTERN =
-        Pattern.compile("\\[\\s*\\d{1,4}\\s*\\]");
-
-    // Matches Roman numeral section markers used in Gleanings (– XLVII –) and
-    // Prayers and Meditations (-IX-): dashes surrounding uppercase Roman numerals.
-    private static final Pattern ROMAN_NUMERAL_MARKER_PATTERN =
-        Pattern.compile("(?i)^[-\u2013\u2014]{1,2} *[IVXLCDM]{1,10} *[-\u2013\u2014]{0,2}$");
 
     private CorpusIngestService() {
     }
@@ -157,7 +146,7 @@ public final class CorpusIngestService {
                     Document document = Jsoup.parse(body, nextUrl);
                     fetchedPages++;
 
-                    List<String> passages = extractPreferredPassages(
+                    List<ExtractedPassage> passages = extractPreferredPassages(
                         client,
                         document,
                         nextUrl,
@@ -249,13 +238,10 @@ public final class CorpusIngestService {
                     continue;
                 }
 
-                List<String> passages = extractPassagesFromCuratedFile(
+                List<ExtractedPassage> passages = extractPassagesFromCuratedFile(
                     sourceFile,
                     entry.sourceFormat(),
-                    appConfig.corpusMinPassageLength(),
-                    entry.author(),
-                    entry.originalUrl(),
-                    entry.title()
+                    appConfig.corpusMinPassageLength()
                 );
                 if (passages.isEmpty()) {
                     skippedRows++;
@@ -263,12 +249,10 @@ public final class CorpusIngestService {
                 }
 
                 String timestamp = DateTimeFormatter.ISO_INSTANT.format(Instant.now());
-                String canonicalUrl = entry.originalUrl().isBlank()
-                    ? sourceFile.toUri().toString()
-                    : canonicalize(entry.originalUrl());
-                if (canonicalUrl == null || canonicalUrl.isBlank()) {
-                    canonicalUrl = sourceFile.toUri().toString();
-                }
+                // Store relative path from corpusBasePath — portable across install directories.
+                // At display time, resolve against runtime corpusBasePath to get the absolute file URI.
+                Path appBase = Path.of(appConfig.corpusBasePath()).toAbsolutePath();
+                String canonicalUrl = appBase.relativize(sourceFile.toAbsolutePath()).toString().replace('\\', '/');
 
                 byte[] sourceBytes = Files.readAllBytes(sourceFile);
                 long docId = CorpusContentRepository.upsertDocument(
@@ -332,7 +316,7 @@ public final class CorpusIngestService {
                 continue;
             }
             List<String> columns = parseCsvLine(rawLine);
-            if (columns.size() < 5) {
+            if (columns.size() < 4) {
                 continue;
             }
 
@@ -340,7 +324,6 @@ public final class CorpusIngestService {
             String title = columns.get(1).trim();
             String author = columns.get(2).trim();
             String sourceFormat = columns.get(3).trim().toLowerCase(Locale.ROOT);
-            String originalUrl = columns.get(4).trim();
 
             if (fileName.isBlank() || title.isBlank()) {
                 continue;
@@ -350,8 +333,7 @@ public final class CorpusIngestService {
                 fileName,
                 title,
                 author.isBlank() ? "Unknown" : author,
-                normalizeSourceFormat(sourceFormat, fileName),
-                originalUrl
+                normalizeSourceFormat(sourceFormat, fileName)
             ));
         }
         return entries;
@@ -392,99 +374,51 @@ public final class CorpusIngestService {
         };
     }
 
-    private static List<String> extractPassagesFromCuratedFile(
+    private static List<ExtractedPassage> extractPassagesFromCuratedFile(
         Path sourceFile,
         String sourceFormat,
-        int minLength,
-        String author,
-        String originalUrl,
-        String title
+        int minLength
     ) throws IOException {
-        boolean hiddenWordsProfile = isHiddenWordsWork(sourceFile, originalUrl, title);
-        boolean compilationProfile = isCompilationWork(author);
-        boolean prayerBookProfile = isPrayerBookWork(sourceFile, originalUrl, title);
-        boolean sectionedProfile = isSectionedWork(sourceFile, originalUrl, title);
         return switch (sourceFormat) {
-            case "docx" -> extractDocxPassages(
-                Files.readAllBytes(sourceFile),
-                minLength,
-                hiddenWordsProfile,
-                compilationProfile,
-                prayerBookProfile,
-                sectionedProfile
-            );
-            case "pdf" -> extractPdfPassages(Files.readAllBytes(sourceFile), minLength);
-            default -> extractHtmlFilePassages(sourceFile, minLength, originalUrl);
+            case "docx" -> extractDocxPassages(Files.readAllBytes(sourceFile), minLength)
+                .stream().map(t -> new ExtractedPassage(t, "")).toList();
+            case "pdf" -> extractPdfPassages(Files.readAllBytes(sourceFile), minLength)
+                .stream().map(t -> new ExtractedPassage(t, "")).toList();
+            default -> extractHtmlFilePassages(sourceFile, minLength);
         };
     }
 
-    private static boolean isCompilationWork(String author) {
-        return "compilation".equalsIgnoreCase(clean(author));
-    }
 
-    private static boolean isHiddenWordsWork(Path sourceFile, String originalUrl, String title) {
-        String combined = (sourceFile == null ? "" : sourceFile.getFileName().toString())
-            + " "
-            + (originalUrl == null ? "" : originalUrl)
-            + " "
-            + (title == null ? "" : title);
-        String normalized = combined.toLowerCase(Locale.ROOT);
-        return normalized.contains("hidden-words") || normalized.contains("hidden words");
-    }
-
-    // Bahá'í Prayers and Bahá'í Prayers and Tablets for Children:
-    // individual prayers delimited by attribution lines (—Bahá'u'lláh, —'Abdu'l-Bahá, etc.)
-    private static boolean isPrayerBookWork(Path sourceFile, String originalUrl, String title) {
-        String combined = (sourceFile == null ? "" : sourceFile.getFileName().toString())
-            + " "
-            + (originalUrl == null ? "" : originalUrl)
-            + " "
-            + (title == null ? "" : title);
-        String normalized = combined.toLowerCase(Locale.ROOT);
-        return normalized.contains("bahai-prayers") || normalized.contains("bahai prayers");
-    }
-
-    // Gleanings (– XLVII –) and Prayers and Meditations (-IX-):
-    // sections delimited by Roman numeral markers; label is prepended to each passage.
-    private static boolean isSectionedWork(Path sourceFile, String originalUrl, String title) {
-        String combined = (sourceFile == null ? "" : sourceFile.getFileName().toString())
-            + " "
-            + (originalUrl == null ? "" : originalUrl)
-            + " "
-            + (title == null ? "" : title);
-        String normalized = combined.toLowerCase(Locale.ROOT);
-        return normalized.contains("gleanings")
-            || normalized.contains("prayers-meditations")
-            || normalized.contains("prayers and meditations");
-    }
-
-    private static List<String> extractHtmlFilePassages(Path sourceFile, int minLength, String originalUrl) throws IOException {
+    private static List<ExtractedPassage> extractHtmlFilePassages(Path sourceFile, int minLength) throws IOException {
         String html = Files.readString(sourceFile, StandardCharsets.UTF_8);
-        String baseUrl = originalUrl == null || originalUrl.isBlank()
-            ? sourceFile.toUri().toString()
-            : originalUrl;
-        Document document = Jsoup.parse(html, baseUrl);
-        return extractPassages(document, minLength);
+        Document document = Jsoup.parse(html, sourceFile.toUri().toString());
+        return extractPassagesWithIds(document, minLength);
     }
 
     private static List<String> extractPdfPassages(byte[] pdfBytes, int minLength) throws IOException {
         try (PDDocument document = Loader.loadPDF(pdfBytes)) {
+            // PDFBox 3.x emits no form feeds and no double-newlines between pages,
+            // so splitting the full text doesn't work. Extract one page at a time instead.
             PDFTextStripper stripper = new PDFTextStripper();
-            String text = clean(stripper.getText(document));
-            if (text.isBlank()) {
-                return List.of();
-            }
-
+            int numPages = document.getNumberOfPages();
             List<String> passages = new ArrayList<>();
-            for (String row : text.split("\\R{2,}")) {
-                String cleaned = clean(row);
-                if (cleaned.length() >= minLength) {
-                    passages.add(cleaned);
+
+            for (int page = 1; page <= numPages; page++) {
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+                String pageText = clean(stripper.getText(document));
+                if (pageText.length() >= minLength) {
+                    passages.add(pageText);
                 }
             }
 
-            if (passages.isEmpty() && text.length() >= minLength) {
-                passages.add(text);
+            if (passages.isEmpty()) {
+                stripper.setStartPage(1);
+                stripper.setEndPage(numPages);
+                String full = clean(stripper.getText(document));
+                if (full.length() >= minLength) {
+                    passages.add(full);
+                }
             }
             return passages;
         }
@@ -527,8 +461,7 @@ public final class CorpusIngestService {
         String fileName,
         String title,
         String author,
-        String sourceFormat,
-        String originalUrl
+        String sourceFormat
     ) {
     }
 
@@ -541,7 +474,7 @@ public final class CorpusIngestService {
             && !normalized.endsWith(".epub");
     }
 
-    private static List<String> extractPreferredPassages(
+    private static List<ExtractedPassage> extractPreferredPassages(
         OkHttpClient client,
         Document document,
         String pageUrl,
@@ -551,16 +484,16 @@ public final class CorpusIngestService {
         if (!docxUrl.isBlank()) {
             try {
                 byte[] docxBytes = downloadBinary(client, docxUrl);
-                List<String> docxPassages = extractDocxPassages(docxBytes, minLength, false, false, false, false);
+                List<String> docxPassages = extractDocxPassages(docxBytes, minLength);
                 if (!docxPassages.isEmpty()) {
-                    return docxPassages;
+                    return docxPassages.stream().map(t -> new ExtractedPassage(t, "")).toList();
                 }
             } catch (IOException ignored) {
                 // Fallback to HTML passage extraction below.
             }
         }
 
-        return extractPassages(document, minLength);
+        return extractPassagesWithIds(document, minLength);
     }
 
     private static String findDocxUrl(Document document) {
@@ -583,15 +516,7 @@ public final class CorpusIngestService {
         }
     }
 
-    private static List<String> extractDocxPassages(
-        byte[] docxBytes,
-        int minLength,
-        boolean hiddenWordsProfile,
-        boolean compilationProfile,
-        boolean prayerBookProfile,
-        boolean sectionedProfile
-    )
-        throws IOException {
+    private static List<String> extractDocxPassages(byte[] docxBytes, int minLength) throws IOException {
         String xml = readWordDocumentXml(docxBytes);
         if (xml.isBlank()) {
             return List.of();
@@ -613,180 +538,9 @@ public final class CorpusIngestService {
             }
         }
 
-        if (hiddenWordsProfile) {
-            return buildHiddenWordsPassages(rows);
-        }
-
-        if (prayerBookProfile) {
-            return buildPrayerBookPassages(rows);
-        }
-
-        if (compilationProfile) {
-            return buildCompilationPassages(rows, minLength);
-        }
-
-        if (sectionedProfile) {
-            return buildSectionedPassages(rows, minLength);
-        }
-
         return mergeDocxRowsIntoPassages(rows, minLength);
     }
 
-    private static List<String> buildCompilationPassages(List<String> rows, int minLength) {
-        List<String> expandedRows = new ArrayList<>();
-        for (String row : rows) {
-            expandedRows.addAll(splitCompilationRow(row));
-        }
-
-        List<String> passages = new ArrayList<>();
-        List<String> current = new ArrayList<>();
-
-        for (String row : expandedRows) {
-            if (isCompilationCitationLine(row)) {
-                int markerEnd = findCompilationMarkerEnd(row);
-                String citationPart = markerEnd > 0 ? clean(row.substring(0, markerEnd)) : clean(row);
-                String trailingQuotePart = markerEnd > 0 ? clean(row.substring(markerEnd)) : "";
-
-                if (!citationPart.isBlank()) {
-                    if (!current.isEmpty()) {
-                        current.add(citationPart);
-                        passages.add(clean(String.join(" ", current)));
-                        current.clear();
-                    } else if (!passages.isEmpty()) {
-                        int lastIndex = passages.size() - 1;
-                        passages.set(lastIndex, clean(passages.get(lastIndex) + " " + citationPart));
-                    }
-                }
-
-                if (!trailingQuotePart.isBlank()) {
-                    current.add(trailingQuotePart);
-                }
-                continue;
-            }
-
-            current.add(row);
-        }
-
-        if (!current.isEmpty()) {
-            passages.add(clean(String.join(" ", current)));
-        }
-
-        if (passages.isEmpty()) {
-            return mergeDocxRowsIntoPassages(rows, minLength);
-        }
-
-        return passages;
-    }
-
-    private static boolean isCompilationCitationLine(String row) {
-        String trimmed = clean(row);
-        if (!trimmed.startsWith("(")) {
-            return false;
-        }
-        return COMPILATION_ITEM_MARKER_PATTERN.matcher(trimmed).find();
-    }
-
-    private static int findCompilationMarkerEnd(String row) {
-        Matcher matcher = COMPILATION_ITEM_MARKER_PATTERN.matcher(row);
-        if (matcher.find()) {
-            return matcher.end();
-        }
-        return -1;
-    }
-
-    private static boolean isCompilationItemStart(String row) {
-        Matcher markerMatcher = COMPILATION_ITEM_MARKER_PATTERN.matcher(row);
-        if (!markerMatcher.find()) {
-            return false;
-        }
-
-        int markerStart = markerMatcher.start();
-        int sourceStart = row.lastIndexOf('(', markerStart);
-        return sourceStart >= 0 && markerStart - sourceStart <= 280;
-    }
-
-    private static List<String> splitCompilationRow(String row) {
-        List<String> segments = new ArrayList<>();
-        Matcher markerMatcher = COMPILATION_ITEM_MARKER_PATTERN.matcher(row);
-        List<Integer> markerStarts = new ArrayList<>();
-        while (markerMatcher.find()) {
-            markerStarts.add(markerMatcher.start());
-        }
-
-        if (markerStarts.size() <= 1) {
-            segments.add(row);
-            return segments;
-        }
-
-        List<Integer> itemStarts = new ArrayList<>();
-        for (int i = 0; i < markerStarts.size(); i++) {
-            int markerStart = markerStarts.get(i);
-            int floor = i == 0 ? 0 : markerStarts.get(i - 1);
-            int inferredStart = row.lastIndexOf('(', markerStart);
-            if (inferredStart < floor || markerStart - inferredStart > 280) {
-                inferredStart = floor;
-            }
-            itemStarts.add(Math.max(inferredStart, floor));
-        }
-
-        for (int i = 0; i < itemStarts.size(); i++) {
-            int start = itemStarts.get(i);
-            int end = i + 1 < itemStarts.size() ? itemStarts.get(i + 1) : row.length();
-            String part = clean(row.substring(start, end));
-            if (!part.isBlank()) {
-                segments.add(part);
-            }
-        }
-
-        return segments.isEmpty() ? List.of(row) : segments;
-    }
-
-    private static List<String> buildHiddenWordsPassages(List<String> rows) {
-        List<String> passages = new ArrayList<>();
-        List<String> current = new ArrayList<>();
-        boolean started = false;
-
-        for (String row : rows) {
-            if (isHiddenWordsEntryStart(row)) {
-                started = true;
-                if (!current.isEmpty()) {
-                    passages.add(clean(String.join(" ", current)));
-                    current.clear();
-                }
-            }
-
-            if (!started) {
-                continue;
-            }
-            current.add(row);
-        }
-
-        if (!current.isEmpty()) {
-            passages.add(clean(String.join(" ", current)));
-        }
-
-        if (passages.isEmpty()) {
-            return mergeDocxRowsIntoPassages(rows, 1);
-        }
-
-        return passages;
-    }
-
-    private static boolean isHiddenWordsEntryStart(String row) {
-        String value = clean(row);
-        if (value.matches("^\\d{1,3}$")) {
-            return true;
-        }
-        if (value.matches("^\\d{1,3}[).:-]?\\s+.+$")) {
-            return true;
-        }
-
-        String upper = value.toUpperCase(Locale.ROOT);
-        return value.length() <= 90
-            && value.equals(upper)
-            && value.startsWith("O ")
-            && value.endsWith("!");
-    }
 
     private static List<String> mergeDocxRowsIntoPassages(List<String> rows, int minLength) {
         List<String> passages = new ArrayList<>();
@@ -821,90 +575,6 @@ public final class CorpusIngestService {
         return passages;
     }
 
-    /**
-     * Splits a prayers book into individual prayers.
-     * Each prayer ends with an attribution line (—Bahá'u'lláh, —'Abdu'l-Bahá, etc.).
-     * Section headings ("Evening", "Infants") naturally become a prefix on the first
-     * prayer in that section, which is harmless and provides light context.
-     * Attribution line is kept at the end of the passage per display convention.
-     */
-    private static List<String> buildPrayerBookPassages(List<String> rows) {
-        List<String> passages = new ArrayList<>();
-        List<String> current = new ArrayList<>();
-
-        for (String row : rows) {
-            current.add(row);
-            if (isAttributionLine(row)) {
-                passages.add(clean(String.join(" ", current)));
-                current.clear();
-            }
-        }
-
-        // Trailing content after the last attribution (e.g., back matter) — keep if substantial
-        if (!current.isEmpty()) {
-            String tail = clean(String.join(" ", current));
-            if (tail.length() >= 50) {
-                passages.add(tail);
-            }
-        }
-
-        if (passages.isEmpty()) {
-            return mergeDocxRowsIntoPassages(rows, 1);
-        }
-        return passages;
-    }
-
-    /**
-     * Splits a sectioned work (Gleanings, Prayers and Meditations) on Roman numeral markers.
-     * Each section label (– XLVII –, -IX-) is prepended to every passage produced from
-     * that section, giving a searchable and citable section reference in the passage text.
-     */
-    private static List<String> buildSectionedPassages(List<String> rows, int minLength) {
-        List<String> passages = new ArrayList<>();
-        String currentLabel = "";
-        List<String> currentSection = new ArrayList<>();
-
-        for (String row : rows) {
-            if (isRomanNumeralMarker(row)) {
-                if (!currentSection.isEmpty()) {
-                    String label = currentLabel;
-                    for (String p : mergeDocxRowsIntoPassages(currentSection, minLength)) {
-                        passages.add(label.isBlank() ? p : label + " " + p);
-                    }
-                    currentSection.clear();
-                }
-                currentLabel = row;
-            } else {
-                currentSection.add(row);
-            }
-        }
-
-        // Emit the final section
-        if (!currentSection.isEmpty()) {
-            String label = currentLabel;
-            for (String p : mergeDocxRowsIntoPassages(currentSection, minLength)) {
-                passages.add(label.isBlank() ? p : label + " " + p);
-            }
-        }
-
-        if (passages.isEmpty()) {
-            return mergeDocxRowsIntoPassages(rows, minLength);
-        }
-        return passages;
-    }
-
-    /**
-     * An attribution line ends a prayer: em-dash followed by author name (short, ≤ 80 chars).
-     * Examples: "—Bahá'u'lláh", "—'Abdu'l-Bahá", "—The Báb", "—Shoghi Effendi"
-     */
-    private static boolean isAttributionLine(String row) {
-        return row.startsWith("\u2014") && row.length() > 1 && row.length() <= 80;
-    }
-
-    /** A Roman numeral section marker: dashes surrounding Roman numeral digits. */
-    private static boolean isRomanNumeralMarker(String row) {
-        return ROMAN_NUMERAL_MARKER_PATTERN.matcher(row).matches();
-    }
 
     private static String cleanDocxExtractedLine(String line) {
         if (line == null || line.isBlank()) {
@@ -1018,12 +688,16 @@ public final class CorpusIngestService {
         return "";
     }
 
-    private static List<String> extractPassages(Document document, int minLength) {
-        List<String> passages = new ArrayList<>();
-        for (Element paragraph : document.select("p")) {
-            String text = clean(paragraph.text());
+    private static List<ExtractedPassage> extractPassagesWithIds(Document document, int minLength) {
+        List<ExtractedPassage> passages = new ArrayList<>();
+        for (Element p : document.select("p")) {
+            // Skip paragraphs inside <nav> elements (table of contents)
+            if (p.closest("nav") != null) continue;
+
+            String anchorId = p.select("a.sf[id]").attr("id"); // empty string if absent
+            String text = clean(p.text());
             if (text.length() >= minLength) {
-                passages.add(text);
+                passages.add(new ExtractedPassage(text, anchorId));
             }
         }
 
@@ -1033,7 +707,7 @@ public final class CorpusIngestService {
 
         String bodyText = clean(document.body() == null ? "" : document.body().text());
         if (bodyText.length() >= minLength) {
-            passages.add(bodyText);
+            passages.add(new ExtractedPassage(bodyText, ""));
         }
         return passages;
     }

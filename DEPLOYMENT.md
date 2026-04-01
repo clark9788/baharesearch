@@ -73,12 +73,14 @@ run-app.bat C:\path\to\keys.properties
 
 ---
 
-## DB-only runtime package (recommended for your current release)
+## Runtime package (source files required)
 
-If you want to distribute **prebuilt `corpus.db`** and **no curated source files**, use:
+The curated xhtml source files must always be included in any deployment. They are required for the Source deep links to resolve correctly at runtime — the app serves them via a local HTTP server and opens the browser at the exact paragraph anchor.
+
+Use `package-runtime-source-only.bat` to build the distribution package:
 
 ```cmd
-package-runtime-db-only.bat
+package-runtime-source-only.bat
 ```
 
 Optional: build private Java runtime first (so users do not need Java installed):
@@ -87,36 +89,40 @@ Optional: build private Java runtime first (so users do not need Java installed)
 build-runtime-image.bat
 ```
 
-Then run packaging command above. If `runtime\bin\java.exe` exists, it is included automatically.
+Then run the packaging command above. If `runtime\bin\java.exe` exists, it is included automatically.
 
 Output package folder:
 
 ```text
-dist\BahaiResearch-runtime-db-only\
+dist\BahaiResearch-runtime-source-only\
 ```
 
 It includes:
 - `target\BahaiResearch-1.0.0-SNAPSHOT-all.jar`
 - `run-app.bat`
-- `data\corpus\corpus.db` (plus `-wal/-shm` if present)
+- `data\corpus\curated\en\` (xhtml source files + manifest.csv)
 - `bahai-research.properties` (local-only default profile)
 - optional `runtime\` (private Java runtime, if built)
 
+On first run the app builds `corpus.db` locally by ingesting from the curated source files. No prebuilt DB is required.
+
 ### Default behavior in packaged properties
 
-- Works with no internet in local-only mode
+- Works offline in local-only mode after first-run ingest
 - No API key required for local corpus search
-- AI fallback can be enabled later by user by adding `gemini.apiKey` 
+- AI assistance (intent parsing, reranking) can be enabled by adding `gemini.apiKey`
 
 ```properties
-research.localOnlyMode=true(default) This keeps all search local, but with an apiKey, Ai will help with Prompt interpretation and intelligent ordering of returned quotes.
-research.localOnlyMode=false. This will allow AI to search out quotes on the internet and give some interpretation of the prompt. Unfortunately, this has produced hallucinations in the past, but the AI might get better over time.
+# Local-only mode: AI helps interpret the prompt and rank results but does not search the web
+research.localOnlyMode=true
+# Web fallback: AI may search bahai.org at query time — has produced hallucinations in the past
+research.localOnlyMode=false
 ```
 
 ### Run packaged app
 
 ```cmd
-run-app.bat C:\path\to\dist\BahaiResearch-runtime-db-only\bahai-research.properties
+run-app.bat C:\path\to\dist\BahaiResearch-runtime-source-only\bahai-research.properties
 ```
 
 `run-app.bat` launch order:

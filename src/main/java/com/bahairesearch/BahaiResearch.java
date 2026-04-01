@@ -6,6 +6,7 @@ import com.bahairesearch.corpus.CorpusIngestService;
 import com.bahairesearch.model.QuoteResult;
 import com.bahairesearch.model.ResearchReport;
 import com.bahairesearch.research.ResearchService;
+import com.sun.net.httpserver.HttpServer;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
@@ -14,13 +15,20 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.awt.Desktop;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -32,6 +40,51 @@ public class BahaiResearch extends Application {
     private static final int WINDOW_HEIGHT = 760;
 
     private final ResearchService researchService = new ResearchService();
+    private AppConfig appConfig;
+    private HttpServer localFileServer;
+    private int localServerPort = -1;
+
+    /**
+     * Starts a local HTTP server that serves corpus files from corpusBasePath.
+     * Using http://localhost avoids the Windows file:/// + #fragment bug where
+     * Desktop.browse() and PowerShell both strip the fragment identifier.
+     */
+    private void startLocalFileServer() {
+        if (appConfig == null) return;
+        try {
+            Path serveRoot = Path.of(appConfig.corpusBasePath()).toAbsolutePath();
+            localFileServer = HttpServer.create(new InetSocketAddress(0), 0);
+            localFileServer.createContext("/", exchange -> {
+                String reqPath = exchange.getRequestURI().getPath();
+                if (reqPath.startsWith("/")) reqPath = reqPath.substring(1);
+                Path file = serveRoot.resolve(reqPath).normalize();
+                // Security: reject requests that escape the serve root
+                if (!file.startsWith(serveRoot) || !Files.isRegularFile(file)) {
+                    exchange.sendResponseHeaders(404, -1);
+                    exchange.close();
+                    return;
+                }
+                byte[] bytes = Files.readAllBytes(file);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (var os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            });
+            localFileServer.setExecutor(null);
+            localFileServer.start();
+            localServerPort = localFileServer.getAddress().getPort();
+        } catch (Exception e) {
+            localServerPort = -1;
+        }
+    }
+
+    @Override
+    public void stop() {
+        if (localFileServer != null) {
+            localFileServer.stop(0);
+        }
+    }
 
     /**
      * Build and display the main application window.
@@ -59,14 +112,16 @@ public class BahaiResearch extends Application {
         ComboBox<String> titleCombo = new ComboBox<>();
         titleCombo.getItems().add("All Titles");
         try {
-            AppConfig startupConfig = ConfigLoader.load();
-            List<String> titles = CorpusIngestService.readTitlesFromManifest(startupConfig);
+            appConfig = ConfigLoader.load();
+            List<String> titles = CorpusIngestService.readTitlesFromManifest(appConfig);
             titleCombo.getItems().addAll(titles);
         } catch (Exception ignored) {
             // Graceful: dropdown shows only "All Titles" if config not yet available
         }
         titleCombo.setValue("All Titles");
         HBox.setHgrow(titleCombo, Priority.ALWAYS);
+
+        startLocalFileServer();
 
         HBox filterBar = new HBox(8, authorLabel, authorCombo, titleLabel, titleCombo);
         filterBar.setAlignment(Pos.CENTER_LEFT);
@@ -86,25 +141,31 @@ public class BahaiResearch extends Application {
         controls.setSpacing(8);
 
         // ── Output area ───────────────────────────────────────────────────────
-        TextArea outputArea = new TextArea();
-        outputArea.setEditable(false);
-        outputArea.setWrapText(true);
-        outputArea.setPromptText("Summary and sourced quotes will appear here.");
+        TextArea summaryArea = new TextArea();
+        summaryArea.setEditable(false);
+        summaryArea.setWrapText(true);
+        summaryArea.setPromptText("Summary will appear here.");
+        summaryArea.setPrefRowCount(5);
+
+        VBox resultsBox = new VBox(8);
+        ScrollPane outputScrollPane = new ScrollPane(resultsBox);
+        outputScrollPane.setFitToWidth(true);
+        outputScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         // Wire button now that both input and output areas are in scope
         beginResearchButton.setOnAction(event -> {
             String authorFilter = "All Authors".equals(authorCombo.getValue()) ? null : authorCombo.getValue();
             String titleFilter  = "All Titles".equals(titleCombo.getValue())   ? null : titleCombo.getValue();
-            runResearch(topicInputArea, outputArea, beginResearchButton, authorFilter, titleFilter);
+            runResearch(topicInputArea, summaryArea, resultsBox, beginResearchButton, authorFilter, titleFilter);
         });
 
         // ── Layout ────────────────────────────────────────────────────────────
-        VBox root = new VBox(filterBar, inputLabel, topicInputArea, controls, outputArea);
+        VBox root = new VBox(filterBar, inputLabel, topicInputArea, controls, summaryArea, outputScrollPane);
         root.setSpacing(12);
         root.setPadding(new Insets(14));
         root.setStyle("-fx-font-size: 16px;");
 
-        VBox.setVgrow(outputArea, Priority.ALWAYS);
+        VBox.setVgrow(outputScrollPane, Priority.ALWAYS);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -120,13 +181,15 @@ public class BahaiResearch extends Application {
 
     private void runResearch(
         TextArea topicInputArea,
-        TextArea outputArea,
+        TextArea summaryArea,
+        VBox resultsBox,
         Button beginResearchButton,
         String selectedAuthor,
         String selectedTitle
     ) {
         String topic = topicInputArea.getText();
-        outputArea.setText("Running research... this may take a moment.\n");
+        summaryArea.setText("Running research... this may take a moment.");
+        resultsBox.getChildren().clear();
         beginResearchButton.setDisable(true);
 
         Task<ResearchReport> researchTask = new Task<>() {
@@ -138,14 +201,23 @@ public class BahaiResearch extends Application {
 
         researchTask.setOnSucceeded(workerStateEvent -> {
             ResearchReport report = researchTask.getValue();
-            outputArea.setText(formatReport(report));
+            summaryArea.setText(report.summary() == null ? "" : report.summary());
+            resultsBox.getChildren().clear();
+            if (report.quotes().isEmpty()) {
+                resultsBox.getChildren().add(new Label("No quotes were returned. Check topic wording and source availability."));
+            } else {
+                int[] num = {1};
+                for (QuoteResult quote : report.quotes()) {
+                    resultsBox.getChildren().add(buildQuoteCard(num[0]++, quote));
+                }
+            }
             beginResearchButton.setDisable(false);
         });
 
         researchTask.setOnFailed(workerStateEvent -> {
             Throwable throwable = researchTask.getException();
             String message = throwable == null ? "Unknown error" : throwable.getMessage();
-            outputArea.setText("Research failed:\n" + message);
+            summaryArea.setText("Research failed:\n" + message);
             beginResearchButton.setDisable(false);
         });
 
@@ -154,40 +226,66 @@ public class BahaiResearch extends Application {
         workerThread.start();
     }
 
-    private String formatReport(ResearchReport report) {
-        StringBuilder resultBuilder = new StringBuilder();
-        resultBuilder.append("Summary\n");
-        resultBuilder.append("=======\n");
-        resultBuilder.append(report.summary()).append("\n\n");
-        resultBuilder.append("Quotes\n");
-        resultBuilder.append("======\n\n");
+    private VBox buildQuoteCard(int number, QuoteResult quote) {
+        Label quoteLabel = new Label(number + ") \u201c" + quote.quote() + "\u201d");
+        quoteLabel.setWrapText(true);
+        quoteLabel.setStyle("-fx-font-style: italic;");
 
-        if (report.quotes().isEmpty()) {
-            resultBuilder.append("No quotes were returned. Check topic wording and source availability.\n");
-            return resultBuilder.toString();
+        Label authorLabel = new Label("   Author: " + quote.author());
+        Label bookLabel   = new Label("   Book: " + quote.bookTitle());
+
+        // Build deep link. Use localhost HTTP server so browser handles #fragment correctly —
+        // Windows file:/// URIs with fragments are broken by Desktop.browse() and PowerShell.
+        String locator = quote.paragraphOrPage();
+        String relativeSourceUrl = quote.sourceUrl();
+        String deepLink = buildDeepLink(relativeSourceUrl, locator);
+
+        Hyperlink sourceLink = new Hyperlink("   Source \u2197");
+        sourceLink.setOnAction(e -> {
+            try {
+                if (locator != null && locator.matches("\\d+")) {
+                    // xhtml with anchor ID — open in browser via local HTTP server
+                    Desktop.getDesktop().browse(new URI(deepLink));
+                } else if (appConfig != null && relativeSourceUrl != null) {
+                    // docx/pdf — open with registered OS handler (Word, Edge PDF viewer, etc.)
+                    java.io.File file = Path.of(appConfig.corpusBasePath())
+                        .resolve(relativeSourceUrl).toAbsolutePath().toFile();
+                    Desktop.getDesktop().open(file);
+                }
+            } catch (Exception ex) {
+                // ignore — handler unavailable
+            }
+        });
+
+        Label locatorLabel = new Label("   Locator: " + (locator != null ? locator : ""));
+
+        VBox card = new VBox(2, quoteLabel, authorLabel, bookLabel, locatorLabel, sourceLink);
+        card.setPadding(new Insets(6, 0, 6, 0));
+        card.setStyle("-fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;");
+        return card;
+    }
+
+    /**
+     * Constructs the URL to open in the browser for a given passage.
+     * Uses the local HTTP server (http://localhost:PORT/relPath#anchor) so that
+     * fragment navigation works reliably across all browsers on Windows.
+     * Falls back to a file:/// URI if the server failed to start.
+     */
+    private String buildDeepLink(String relativeSourceUrl, String locator) {
+        if (relativeSourceUrl == null || relativeSourceUrl.isBlank()) return null;
+
+        String baseUrl;
+        if (localServerPort > 0) {
+            baseUrl = "http://localhost:" + localServerPort + "/" + relativeSourceUrl;
+        } else if (appConfig != null) {
+            baseUrl = Path.of(appConfig.corpusBasePath())
+                .resolve(relativeSourceUrl).toAbsolutePath().toUri().toString();
+        } else {
+            return null;
         }
 
-        int quoteNumber = 1;
-        for (QuoteResult quote : report.quotes()) {
-            resultBuilder.append(quoteNumber)
-                .append(") \"")
-                .append(quote.quote())
-                .append("\"\n")
-                .append("   Author: ")
-                .append(quote.author())
-                .append("\n")
-                .append("   Book: ")
-                .append(quote.bookTitle())
-                .append("\n")
-                .append("   Paragraph/Page: ")
-                .append(quote.paragraphOrPage())
-                .append("\n")
-                .append("   URL: ")
-                .append(quote.sourceUrl())
-                .append("\n\n");
-            quoteNumber++;
-        }
-
-        return resultBuilder.toString();
+        return (locator != null && locator.matches("\\d+"))
+            ? baseUrl + "#" + locator
+            : baseUrl;
     }
 }

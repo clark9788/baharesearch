@@ -14,7 +14,7 @@ Desktop research assistant for finding sourced Bahá’í quotes from a **local 
 - AI also ranks the returned quotes in order of most relevant
 - AI can be returned to web search by setting research.localOnlyMode=false in .properties file
 - Future plans to research other AI api's to see if they perform better. 
-- Page indicator are just relative locations in the file, not tied to any printed resource. Paragraph numbers appear in the text when available.
+- Each result includes a clickable Source link that opens the browser at the exact paragraph. Locators are HTML anchor IDs embedded in the bahai.org xhtml source files. For the 4 non-xhtml files (docx/pdf), Source opens the file in the registered OS handler (Word, Edge, etc.).
 - Used chatgpt-5.3-codex for original design and coding. Used sonnet-4.6 for improvements to search algorithm. 
 ---
 
@@ -49,10 +49,7 @@ build-runtime-image.bat
 3) (Optional for release packaging):
 
 ```cmd
-package-runtime-db-only.bat
-```cmd
 package-runtime-source-only.bat
-
 ```
 
 ### Follow-on build runs (normal development/release updates)
@@ -61,7 +58,6 @@ Most updates only need:
 
 ```cmd
 mvn -DskipTests package
-package-runtime-db-only.bat
 package-runtime-source-only.bat
 ```
 
@@ -150,12 +146,15 @@ run-app.bat c:\path\to\bahai-research.properties
 
 ## Packaging recommendations
 
-For end-user runtime package, include:
+Use `package-runtime-source-only.bat` for end-user distribution. It includes:
 
 - `target/BahaiResearch-1.0.0-SNAPSHOT-all.jar`
-- `data/corpus/corpus.db` (and `-wal`/`-shm` if present while app is open)
+- `data/corpus/curated/en/` (xhtml source files + manifest — required for Source deep links)
 - your local properties file (distributed privately)
-- optional `run-app.bat`
+- `run-app.bat`
+- optional bundled Java runtime (`runtime/`)
+
+On first run the app ingests from the curated source files and builds `corpus.db` locally.
 
 Recommended runtime flags:
 
@@ -163,9 +162,7 @@ Recommended runtime flags:
 - `corpus.forceReingest=false`
 - `research.localOnlyMode=true`
 
-Keep curated source files in repo under:
-
-- `data/corpus/curated/en/**`
+Note: the curated xhtml source files must always be co-located with the app. The Source deep links resolve files at runtime using `corpus.basePath`.
 
 ---
 

@@ -77,8 +77,10 @@ public final class CorpusContentRepository {
 
     /**
      * Replace all stored passages for one document.
+     * Uses the anchor ID from each ExtractedPassage as the locator; falls back to "p.N" for
+     * docx/pdf passages that have no anchor ID.
      */
-    public static void replacePassages(Connection connection, long docId, List<String> passages) throws SQLException {
+    public static void replacePassages(Connection connection, long docId, List<ExtractedPassage> passages) throws SQLException {
         try (PreparedStatement deleteStatement = connection.prepareStatement("DELETE FROM passages WHERE doc_id = ?")) {
             deleteStatement.setLong(1, docId);
             deleteStatement.executeUpdate();
@@ -86,13 +88,16 @@ public final class CorpusContentRepository {
 
         String insertSql = "INSERT INTO passages (doc_id, locator, text_content) VALUES (?, ?, ?)";
         try (PreparedStatement insertStatement = connection.prepareStatement(insertSql)) {
-            int locator = 1;
-            for (String passage : passages) {
+            int seq = 1;
+            for (ExtractedPassage passage : passages) {
+                String locator = (passage.locator() != null && !passage.locator().isBlank())
+                    ? passage.locator()
+                    : "p." + seq;
                 insertStatement.setLong(1, docId);
-                insertStatement.setString(2, "p." + locator);
-                insertStatement.setString(3, passage);
+                insertStatement.setString(2, locator);
+                insertStatement.setString(3, passage.text());
                 insertStatement.addBatch();
-                locator++;
+                seq++;
             }
             insertStatement.executeBatch();
         }
