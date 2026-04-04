@@ -232,16 +232,15 @@ public class BahaiResearch extends Application {
     }
 
     private VBox buildQuoteCard(int number, QuoteResult quote) {
-        TextArea quoteLabel = new TextArea(number + ") \u201c" + quote.quote() + "\u201d");
+        String quoteText = number + ") \u201c" + quote.quote() + "\u201d"
+            + "\n   Author: " + quote.author()
+            + "  |  Book: " + quote.bookTitle();
+        TextArea quoteLabel = new TextArea(quoteText);
         quoteLabel.setEditable(false);
         quoteLabel.setWrapText(true);
         quoteLabel.setStyle("-fx-font-style: normal; -fx-font-size: 16px; -fx-font-weight: normal; -fx-background-color: transparent;");
-        // Set font style here 
-        quoteLabel.setPrefRowCount(3);
+        quoteLabel.setPrefRowCount(5);
         quoteLabel.setMaxHeight(Double.MAX_VALUE);
-
-        Label authorLabel = new Label("   Author: " + quote.author());
-        Label bookLabel   = new Label("   Book: " + quote.bookTitle());
 
         // Build deep link. Use localhost HTTP server so browser handles #fragment correctly —
         // Windows file:/// URIs with fragments are broken by Desktop.browse() and PowerShell.
@@ -249,7 +248,8 @@ public class BahaiResearch extends Application {
         String relativeSourceUrl = quote.sourceUrl();
         String deepLink = buildDeepLink(relativeSourceUrl, locator);
 
-        Hyperlink sourceLink = new Hyperlink("   Source \u2197");
+        Hyperlink sourceLink = new Hyperlink("Source \u2197");
+        sourceLink.setStyle("-fx-font-size: 13px;");
         sourceLink.setOnAction(e -> {
             try {
                 if (locator != null && locator.matches("\\d+")) {
@@ -266,9 +266,7 @@ public class BahaiResearch extends Application {
             }
         });
 
-        Label locatorLabel = new Label("   Locator: " + (locator != null ? locator : ""));
-
-        VBox card = new VBox(2, quoteLabel, authorLabel, bookLabel, locatorLabel, sourceLink);
+        VBox card = new VBox(2, quoteLabel, sourceLink);
         card.setPadding(new Insets(6, 0, 6, 0));
         card.setStyle("-fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;");
         return card;
