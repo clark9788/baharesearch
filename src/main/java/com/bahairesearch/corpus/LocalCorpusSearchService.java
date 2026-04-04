@@ -25,6 +25,8 @@ public final class LocalCorpusSearchService {
 
     private static final Logger LOGGER = Logger.getLogger(LocalCorpusSearchService.class.getName());
 
+    private record HitsResult(List<CorpusSearchHit> hits, String effectiveQuery, boolean usedFallback) {}
+
     private static final Set<String> NOISE_TOKENS = Set.of(
         "by", "for", "with", "and", "the", "from", "about", "quotes", "quote", "please", "show", "find"
     );
@@ -105,15 +107,17 @@ public final class LocalCorpusSearchService {
                 conceptTerms
             );
 
-            List<CorpusSearchHit> hits = findHits(
+            HitsResult hitsResult = findHits(
                 corpusPaths,
                 ftsQuery,
                 orFtsQuery,
                 retrievalPoolSize,
                 requiredAuthor,
                 explicitTitle,
-                requestedBookTokens
+                requestedBookTokens,
+                appConfig
             );
+            List<CorpusSearchHit> hits = hitsResult.hits();
             logCount(appConfig, "hits", hits.size());
 
             List<CorpusSearchHit> filtered = filterByRequestedAuthor(requiredAuthor, hits);
@@ -127,13 +131,26 @@ public final class LocalCorpusSearchService {
             // If HW #5 (short passage) appears in both FTS results and phrase results,
             // mergeHits keeps the first-seen version — we want the phrase version (-99999),
             // not the FTS version (BM25 ~-5) which would be buried behind band-0 passages.
-            List<CorpusSearchHit> combinedPhraseHits = new ArrayList<>(fetchPhraseHits(
-                corpusPaths, topic, retrievalPoolSize,
-                requiredAuthor, explicitTitle, requestedBookTokens));
-            if (intent.knownPhrase() != null && !intent.knownPhrase().isBlank()) {
-                combinedPhraseHits = mergeHits(combinedPhraseHits, fetchPhraseHits(
-                    corpusPaths, intent.knownPhrase(), retrievalPoolSize,
+            // Only phrase-search when topic has 2+ significant words — a single word adds
+            // no precision over FTS and just duplicates the same 144+ hits.
+            List<String> topicFtsTokens = extractFtsTokens(topic, requiredAuthor);
+            String topicLikePattern = "%" + normalizeForMatch(topic).replace(" ", "%") + "%";
+            List<CorpusSearchHit> combinedPhraseHits = new ArrayList<>();
+            if (topicFtsTokens.size() >= 2) {
+                logCount(appConfig, "PhraseQuery topic LIKE: " + topicLikePattern + " →", 0);
+                combinedPhraseHits.addAll(fetchPhraseHits(
+                    corpusPaths, topic, retrievalPoolSize,
                     requiredAuthor, explicitTitle, requestedBookTokens));
+                logCount(appConfig, "PhraseQuery topic hits", combinedPhraseHits.size());
+            }
+            if (intent.knownPhrase() != null && !intent.knownPhrase().isBlank()) {
+                String aiLikePattern = "%" + normalizeForMatch(intent.knownPhrase()).replace(" ", "%") + "%";
+                logCount(appConfig, "PhraseQuery AI LIKE: " + aiLikePattern + " →", 0);
+                List<CorpusSearchHit> aiPhraseHits = fetchPhraseHits(
+                    corpusPaths, intent.knownPhrase(), retrievalPoolSize,
+                    requiredAuthor, explicitTitle, requestedBookTokens);
+                logCount(appConfig, "PhraseQuery AI hits", aiPhraseHits.size());
+                combinedPhraseHits = mergeHits(combinedPhraseHits, aiPhraseHits);
             }
             // Phrase hits first, then FTS hits fill in non-duplicates
             topical = mergeHits(combinedPhraseHits, topical);
@@ -178,8 +195,8 @@ public final class LocalCorpusSearchService {
                     List<CorpusSearchHit> conceptHits = findHits(
                         corpusPaths, conceptOrFtsQuery, conceptOrFtsQuery,
                         retrievalPoolSize, requiredAuthor, explicitTitle,
-                        List.of()
-                    );
+                        List.of(), appConfig
+                    ).hits();
                     logCount(appConfig, "semantic fallback conceptHits", conceptHits.size());
                     if (!conceptHits.isEmpty()) {
                         List<String> aiOnlyTerms = inferEffectiveConceptTerms("", requiredAuthor, intent.concepts());
@@ -218,8 +235,19 @@ public final class LocalCorpusSearchService {
                 ))
                 .toList();
 
-            String summary = "Local corpus returned " + quotes.size()
-                + " verified passage(s) for this topic (AI-ranked from local candidates).";
+            String displayQuery = hitsResult.effectiveQuery()
+                .replace("*", "")
+                .replace(" AND ", " and ")
+                .replace(" OR ", " or ");
+            String summary;
+            if (hitsResult.usedFallback()) {
+                summary = "Local corpus returned " + quotes.size()
+                    + " passage(s) — exact search found nothing; broadened to: " + displayQuery
+                    + "  (Tip: try fewer, more specific keywords)";
+            } else {
+                summary = "Local corpus returned " + quotes.size()
+                    + " passage(s) — searched: " + displayQuery;
+            }
             return new ResearchReport(summary, quotes);
         } catch (IllegalStateException exception) {
             return new ResearchReport(appConfig.noResultsText(), List.of());
@@ -481,14 +509,15 @@ public final class LocalCorpusSearchService {
     // Core search — findHits with AND/OR fallback
     // -------------------------------------------------------------------------
 
-    private static List<CorpusSearchHit> findHits(
+    private static HitsResult findHits(
         CorpusPaths corpusPaths,
         String ftsQuery,
         String orFtsQuery,
         int limit,
         String requiredAuthor,
         String explicitTitle,
-        List<String> requestedBookTokens
+        List<String> requestedBookTokens,
+        AppConfig appConfig
     ) {
         boolean authorScoped = requiredAuthor != null && !requiredAuthor.isBlank();
         boolean titleScoped  = explicitTitle  != null && !explicitTitle.isBlank();
@@ -499,19 +528,27 @@ public final class LocalCorpusSearchService {
             List<CorpusSearchHit> hits = new ArrayList<>();
             try (Connection connection = CorpusConnectionFactory.open(corpusPaths)) {
                 // Try AND-based FTS query first; fall back to OR if no results
+                logCount(appConfig, "FtsQuery AND: " + ftsQuery + " →", 0);
                 hits = executeHitsQuery(connection, sql, ftsQuery,
                     authorScoped, requiredAuthor, titleScoped, explicitTitle, limit);
+                logCount(appConfig, "FtsQuery AND hits", hits.size());
 
+                boolean usedOrFallback = false;
                 if (hits.isEmpty() && !orFtsQuery.isBlank() && !orFtsQuery.equals(ftsQuery)) {
+                    logCount(appConfig, "FtsQuery AND=0, OR: " + orFtsQuery + " →", 0);
                     hits = executeHitsQuery(connection, sql, orFtsQuery,
                         authorScoped, requiredAuthor, titleScoped, explicitTitle, limit);
+                    logCount(appConfig, "FtsQuery OR hits", hits.size());
+                    usedOrFallback = true;
                 }
 
                 if (!requestedBookTokens.isEmpty()) {
                     hits = filterByRequestedBook(hits, requestedBookTokens);
                 }
 
-                return hits.stream().limit(Math.max(1, limit)).toList();
+                String effectiveQuery = usedOrFallback ? orFtsQuery : ftsQuery;
+                return new HitsResult(hits.stream().limit(Math.max(1, limit)).toList(),
+                    effectiveQuery, usedOrFallback);
             } catch (SQLException exception) {
                 lastException = exception;
                 if (!isBusyLock(exception) || attempt == 3) {

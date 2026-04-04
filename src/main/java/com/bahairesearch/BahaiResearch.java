@@ -137,7 +137,11 @@ public class BahaiResearch extends Application {
 
         Button beginResearchButton = new Button("Begin Research →");
 
-        HBox controls = new HBox(beginResearchButton);
+        Label hintLabel = new Label("Tip: 2\u20133 key words give the sharpest results. Noise words (the, for, about) are ignored.");
+        hintLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #666666;");
+
+        HBox controls = new HBox(12, beginResearchButton, hintLabel);
+        controls.setAlignment(Pos.CENTER_LEFT);
         controls.setSpacing(8);
 
         // ── Output area ───────────────────────────────────────────────────────
@@ -164,6 +168,7 @@ public class BahaiResearch extends Application {
         root.setSpacing(12);
         root.setPadding(new Insets(14));
         root.setStyle("-fx-font-size: 16px;");
+        // Adjust font size here for labels
 
         VBox.setVgrow(outputScrollPane, Priority.ALWAYS);
 
@@ -230,7 +235,8 @@ public class BahaiResearch extends Application {
         TextArea quoteLabel = new TextArea(number + ") \u201c" + quote.quote() + "\u201d");
         quoteLabel.setEditable(false);
         quoteLabel.setWrapText(true);
-        quoteLabel.setStyle("-fx-font-style: italic; -fx-background-color: transparent;");
+        quoteLabel.setStyle("-fx-font-style: normal; -fx-font-size: 16px; -fx-font-weight: normal; -fx-background-color: transparent;");
+        // Set font style here 
         quoteLabel.setPrefRowCount(3);
         quoteLabel.setMaxHeight(Double.MAX_VALUE);
 
