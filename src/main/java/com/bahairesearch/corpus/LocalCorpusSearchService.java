@@ -243,10 +243,12 @@ public final class LocalCorpusSearchService {
             if (hitsResult.usedFallback()) {
                 summary = "Local corpus returned " + quotes.size()
                     + " passage(s) — exact search found nothing; broadened to: " + displayQuery
-                    + "  (Tip: try fewer, more specific keywords)";
+                    + "  (Tip: try fewer, more specific keywords)"
+                    + "\n<ctrl-a> highlight quote <ctrl-c> copy quote";
             } else {
                 summary = "Local corpus returned " + quotes.size()
-                    + " passage(s) — searched: " + displayQuery;
+                    + " passage(s) — searched: " + displayQuery
+                    + "\n<ctrl-a> highlight quote <ctrl-c> copy quote";
             }
             return new ResearchReport(summary, quotes);
         } catch (IllegalStateException exception) {

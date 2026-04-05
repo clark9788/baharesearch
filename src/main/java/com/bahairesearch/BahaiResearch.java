@@ -249,7 +249,7 @@ public class BahaiResearch extends Application {
         String deepLink = buildDeepLink(relativeSourceUrl, locator);
 
         Hyperlink sourceLink = new Hyperlink("Source \u2197");
-        sourceLink.setStyle("-fx-font-size: 13px;");
+        sourceLink.setStyle("-fx-font-size: 16px;");
         sourceLink.setOnAction(e -> {
             try {
                 if (locator != null && locator.matches("\\d+")) {
