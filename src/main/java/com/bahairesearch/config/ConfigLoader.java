@@ -74,7 +74,10 @@ public final class ConfigLoader {
     public static AppConfig load() {
         String keyPathValue = System.getenv(ENV_KEY_PATH);
         if (isBlank(keyPathValue)) {
-            throw new IllegalStateException("Missing KEY_PATH environment variable.");
+            keyPathValue = System.getProperty("bahai.keyPath");
+        }
+        if (isBlank(keyPathValue)) {
+            throw new IllegalStateException("Missing KEY_PATH environment variable (or bahai.keyPath system property).");
         }
 
         Path keyPath = Path.of(keyPathValue);
@@ -105,7 +108,12 @@ public final class ConfigLoader {
         );
         int maxQuotes = parsePositiveInt(properties.getProperty(KEY_MAX_QUOTES), DEFAULT_MAX_QUOTES);
         int timeoutSeconds = parsePositiveInt(properties.getProperty(KEY_TIMEOUT_SECONDS), DEFAULT_TIMEOUT_SECONDS);
-        String corpusBasePath = valueOrDefault(properties.getProperty(KEY_CORPUS_BASE_PATH), DEFAULT_CORPUS_BASE_PATH);
+        // bahai.corpusPath system property allows jpackage to pass an absolute path via
+        // --java-options "-Dbahai.corpusPath=$APPDIR\data\corpus" without affecting dev setup.
+        String corpusBasePath = System.getProperty("bahai.corpusPath");
+        if (isBlank(corpusBasePath)) {
+            corpusBasePath = valueOrDefault(properties.getProperty(KEY_CORPUS_BASE_PATH), DEFAULT_CORPUS_BASE_PATH);
+        }
         String corpusDatabaseFileName =
             valueOrDefault(properties.getProperty(KEY_CORPUS_DB_FILE), DEFAULT_CORPUS_DB_FILE);
         String corpusSnapshotsDirName =

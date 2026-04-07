@@ -49,7 +49,7 @@ build-runtime-image.bat
 3) (Optional for release packaging):
 
 ```cmd
-package-runtime-source-only.bat
+package-installer.bat
 ```
 
 ### Follow-on build runs (normal development/release updates)
@@ -58,7 +58,7 @@ Most updates only need:
 
 ```cmd
 mvn -DskipTests package
-package-runtime-source-only.bat
+package-installer.bat
 ```
 
 You only need to rerun `build-runtime-image.bat` when:
@@ -83,15 +83,15 @@ target/BahaiResearch-1.0.0-SNAPSHOT-all.jar
 Packaging script (if used) produces:
 
 ```text
-dist/BahaiResearch-runtime-db-only/
-dist/BahaiResearch-runtime-source-only/
+dist/installer/BahaiResearch/
+
 ```
 
 ---
 
 ## Runtime configuration (`KEY_PATH`)
 
-The app reads settings from a properties file pointed to by environment variable `KEY_PATH`.
+The app reads settings from a properties file pointed to by environment variable `KEY_PATH`. If KEY_PATH is not set, reads from project root .properties file.
 
 Create a local file like `bahai-research.example.properties` (do **not** commit real secrets):
 
@@ -146,12 +146,11 @@ run-app.bat c:\path\to\bahai-research.properties
 
 ## Packaging recommendations
 
-Use `package-runtime-source-only.bat` for end-user distribution. It includes:
+Use `package-installer.bat` for end-user distribution. It includes:
 
 - `target/BahaiResearch-1.0.0-SNAPSHOT-all.jar`
 - `data/corpus/curated/en/` (xhtml source files + manifest — required for Source deep links)
 - your local properties file (distributed privately)
-- `run-app.bat`
 - optional bundled Java runtime (`runtime/`)
 
 On first run the app ingests from the curated source files and builds `corpus.db` locally.
