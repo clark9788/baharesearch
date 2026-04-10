@@ -14,8 +14,8 @@ Desktop research assistant for finding sourced Bahá’í quotes from a **local 
 - AI also ranks the returned quotes in order of most relevant
 - AI can be returned to web search by setting research.localOnlyMode=false in .properties file
 - Future plans to research other AI api's to see if they perform better. 
-- Each result includes a clickable Source link that opens the browser at the exact paragraph. Locators are HTML anchor IDs embedded in the bahai.org xhtml source files. For the 4 non-xhtml files (docx/pdf), Source opens the file in the registered OS handler (Word, Edge, etc.).
-- Used chatgpt-5.3-codex for original design and coding. Used sonnet-4.6 for improvements to search algorithm. 
+- Each result includes a clickable Source link that opens the browser at the exact paragraph. Locators are HTML anchor IDs embedded in the bahai.org xhtml source files. For the 4 non-xhtml files (docx/pdf), Source opens the file in the registered OS handler (Word, Edge, etc.), but goes to the beginnin of file. Use Search for these.
+- Used chatgpt-5.3-codex for original design and coding. Used sonnet-4.6 for improvements to search algorithm and finish. 
 ---
 
 ## Tech stack
@@ -99,7 +99,7 @@ Create a local file like `bahai-research.example.properties` (do **not** commit 
 gemini.apiKey=YOUR_API_KEY
 gemini.model=gemini-2.5-flash
 
-research.requiredSite=https://www.bahai.org/library/
+research.requiredSite=https://oceanlibrary.com/
 research.localOnlyMode=true                      ** uses local database when true, uses local and web search when false
 research.debugIntent=false
 research.noResultsText=No Results                ** text for No Results in output

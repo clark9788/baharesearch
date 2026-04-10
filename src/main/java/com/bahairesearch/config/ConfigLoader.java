@@ -38,7 +38,7 @@ public final class ConfigLoader {
     private static final String KEY_CORPUS_CURATED_MANIFEST_FILE = "corpus.curated.manifestFileName";
 
     private static final String DEFAULT_MODEL = "gemini-2.5-flash";
-    private static final String DEFAULT_REQUIRED_SITE = "oceanlibrary.com";
+    private static final String DEFAULT_REQUIRED_SITE = "https://oceanlibrary.com/";
     private static final boolean DEFAULT_LOCAL_ONLY_MODE = true;
     private static final String DEFAULT_NO_RESULTS_TEXT = "No Results";
     private static final boolean DEFAULT_DEBUG_INTENT = false;

@@ -114,6 +114,9 @@ if errorlevel 1 (
     echo ERROR: jpackage failed. Check output above.
     goto :cleanup
   )
+  
+  copy "%ROOT%README-Distribution.md" "%OUT%\BahaiResearch\README-Distribution.md" >nul 
+  copy "%ROOT%Search_flow.md" "%OUT%\BahaiResearch\Search_flow.md" >nul 
 
   echo [4/4] Done ^(app-image^).
   echo Portable app folder: %OUT%\BahaiResearch
