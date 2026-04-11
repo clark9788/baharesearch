@@ -210,4 +210,15 @@ The key is design:
 2. add optional commentary retrieval pipeline,
 3. render in separate section with explicit label.
 
+## Warnings on Install and Pirewall warning
+This installer is safe, but it is not yet code‑signed.
+Because of this, Windows SmartScreen may display a warning such as “Windows protected your PC” or “Unknown publisher.”
+To install:
 
+Click More info or Keep Anyway
+Click Run anyway or Delete(DownArrow) -Keep Anyway
+
+This happens because the installer is newly published and has not yet built up Windows reputation.
+No system files are modified outside the application’s install directory.
+
+On first use, Windows Firewall make ask for permission for the Java HTML server to run. This server provides access to the HTML source files #anchor numbers to open file to exact location of quote, but does not need access through the firewall, so deny the firewall rule setup.
