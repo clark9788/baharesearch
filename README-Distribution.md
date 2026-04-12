@@ -28,6 +28,7 @@ The search algorithm is the strength of this tool. It starts with up to a 3 word
 - JavaFX
 - SQLite
 - Maven
+- Inno Setup
 - Optional Gemini API integration for intent/reranking
 
 ## Runtime configuration (`KEY_PATH`)
@@ -79,7 +80,7 @@ Generate the Key:Click the "Create API key" button.You will be asked to choose a
 Copy and Secure:Once the key is generated, a string of characters will appear. Copy it immediately.⚠️ 
 Security Note: Treat this key like a password. Do not hard-code it directly into your application's source code or upload it to public repositories like GitHub. Use Environment Variables (e.g., .env files) to keep it safe.
 
-## Warnings on Install and Pirewall warning
+## Warnings on Install and Firewall warning
 This installer is safe, but it is not yet code‑signed.
 Because of this, Windows SmartScreen may display a warning such as “Windows protected your PC” or “Unknown publisher.”
 To install:
@@ -88,6 +89,6 @@ Click More info or Keep Anyway
 Click Run anyway or Delete(DownArrow) -Keep Anyway
 
 This happens because the installer is newly published and has not yet built up Windows reputation.
-No system files are modified outside the application’s install directory.
+No system files are modified outside the = install directory.
 
 On first use, Windows Firewall make ask for permission for the Java HTML server to run. This server provides access to the HTML source files #anchor numbers to open file to exact location of quote, but does not need access through the firewall, so deny the firewall rule setup.

@@ -24,6 +24,7 @@ Desktop research assistant for finding sourced Bahá’í quotes from a **local 
 - JavaFX
 - SQLite
 - Maven
+- Inno Setup
 - Optional Gemini API integration for intent/reranking
 
 ---
@@ -210,7 +211,7 @@ The key is design:
 2. add optional commentary retrieval pipeline,
 3. render in separate section with explicit label.
 
-## Warnings on Install and Pirewall warning
+## Warnings on Install and Firewall warning
 This installer is safe, but it is not yet code‑signed.
 Because of this, Windows SmartScreen may display a warning such as “Windows protected your PC” or “Unknown publisher.”
 To install:
