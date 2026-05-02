@@ -12,10 +12,19 @@ Desktop research assistant for finding sourced Bahá’í quotes from a **local 
 - BahaResearchofResults.docx has a list of quotes returned when the AI was producing quotes from the web
 - AI now evaluates research input and ranks words for search. It also tries to guess a good source -- author, title
 - AI also ranks the returned quotes in order of most relevant
+- Search uses a NEAR → AND → OR query tier: 2-keyword searches try proximity matching first (both words within 15 words of each other), then fall back to AND, then OR
+- Author dropdown drives the Title dropdown — selecting an author loads only that author's titles from the DB; Title is disabled until an author is chosen
 - AI can be returned to web search by setting research.localOnlyMode=false in .properties file
 - Future plans to research other AI api's to see if they perform better. 
 - Each result includes a clickable Source link that opens the browser at the exact paragraph. Locators are HTML anchor IDs embedded in the bahai.org xhtml source files. For the 4 non-xhtml files (docx/pdf), Source opens the file in the registered OS handler (Word, Edge, etc.), but goes to the beginnin of file. Use Search for these.
 - Used chatgpt-5.3-codex for original design and coding. Used sonnet-4.6 for improvements to search algorithm and finish. 
+
+## Android Version
+
+An Android port of this app exists at `D:/AI-Python/BahaiResearchA` (also on GitHub as BahaiResearchA).
+
+**That project is dependent on this one.** The Android app ships with a pre-built copy of `data/corpus/corpus.db` as a static asset. It does not perform ingestion. If new books are added to this corpus and re-ingested, the updated `corpus.db` must be copied to the Android project's `app/src/main/assets/corpus.db` to pick up the new content.
+
 ---
 
 ## Tech stack
@@ -38,7 +47,7 @@ All commands below are run from project root.
 1) Build app jar:
 
 ```cmd
-mvn -DskipTests package
+mvn -DskipTests package  
 ```
 
 2) (Optional but recommended for end-user distribution) Build private Java runtime:
@@ -50,7 +59,10 @@ build-runtime-image.bat
 3) (Optional for release packaging):
 
 ```cmd
-package-installer.bat
+package-installer.bat //This must be updated in 6 places for new version
+
+4) Run inno with BahaiResearch.iss for installable Windows file
+
 ```
 
 ### Follow-on build runs (normal development/release updates)
@@ -184,7 +196,7 @@ git push
 ## Useful docs
 
 - `DEPLOYMENT.md` – packaging and run details
-- `src/main/java/com/bahairesearch/config/Search_flow.md` – query/search flow notes
+- `SEARCH.md` – full search algorithm: query tiers, ranking, filters, debug logging
 
 Version 2 notes:
 Rough effort estimate:
@@ -222,4 +234,4 @@ Click Run anyway or Delete(DownArrow) -Keep Anyway
 This happens because the installer is newly published and has not yet built up Windows reputation.
 No system files are modified outside the application’s install directory.
 
-On first use, Windows Firewall make ask for permission for the Java HTML server to run. This server provides access to the HTML source files #anchor numbers to open file to exact location of quote, but does not need access through the firewall, so deny the firewall rule setup.
+On first use, Windows Firewall may ask for permission for the Java HTML server to run. This server provides access to the HTML source files #anchor numbers to open file to exact location of quote, but does not need access through the firewall, so deny the firewall rule setup.

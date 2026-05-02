@@ -20,7 +20,7 @@ Desktop research assistant for finding sourced Bahá’í quotes from a **local 
 ---
 
 ## Search Overview
-The search algorithm is the strength of this tool. It starts with up to a 3 word AND query, meaning it will specifically match quotes with all three words in them. If the user comes up with three specific words they will get a quote that exactly matches. More than 3 words will be added to the query as OR matches, meaning if any of the words are included there will be a match. If there are no matches then the logic goes on to a full OR query where all words are used to bring back quotes with any of the words included. If the user has AI setup, then AI will look at the words and try to interpret the meaning. This can be a paragraph that descibes what the user is trying to find and AI will return most important words for the database lookup to use. AI will also help to rank query results if more than the number of quotes to be returned (8 by default) are found. A detailed explanation of the search logic is in the included Search_flow.md.
+The search algorithm is the strength of this tool. A two word query will result in a NEAR match, meaning the two words must be within 15(setable) characters of each other. A 3 word AND query will specifically match quotes with all three words in them. If the user comes up with three specific words they will get a quote that exactly matches. More than 3 words will be added to the query as OR matches, meaning if any of the words are included there will be a match. If there are no matches then the logic goes on to a full OR query where all words are used to bring back quotes with any of the words included. If the user has AI setup, then AI will look at the words and try to interpret the meaning. This can be a paragraph that descibes what the user is trying to find and AI will return most important words for the database lookup to use. AI will also help to rank query results if more than the number of quotes to be returned (8 by default) are found. A detailed explanation of the search logic is in the included Search_flow.md.
 
 ## Tech stack
 
@@ -39,14 +39,14 @@ The app reads settings from a properties file pointed to by environment variable
 Windows Start cmd.exe to set up Account environment variable
 setx KEY_PATH "C:\Users\Your-logon\.credentials\bahai-research.properties"
 
-Create a local file like `bahai-research.example.properties` (do **not** commit real secrets):
+Create a local file like `bahai-research.properties in a directory outside the app directory` (do **not** commit real secrets to your local copy within the local directory. Use the method above to store the KEY_PATH outside of the app directory.):
 
 ```properties
 gemini.apiKey=YOUR_API_KEY
 gemini.model=gemini-2.5-flash
 
 research.requiredSite=https://oceanlibrary.com/  ** The bahai.org/library is not currently indexed.
-research.localOnlyMode=true                      ** uses local database when true, uses local and web search when false. Goes with the research.requiredSite above.
+research.localOnlyMode=true                      ** uses local database when true, uses local and web search when false. Goes with the research.requiredSite above. This methodology produced some hallucinations.
 research.debugIntent=false                       ** discarded for production
 research.noResultsText=No Results                ** text for No Results in output
 research.maxQuotes=8                             ** Change the number of quotes returned
@@ -65,7 +65,7 @@ corpus.ingestRequestDelayMillis=150
 corpus.minPassageLength=80
 
 corpus.autoIngestIfEmpty=false
-corpus.forceReingest=false
+corpus.forceReingest=false                          ** Causes database to be rebuilt. Do not leave true
 
 corpus.curatedIngestEnabled=true
 corpus.curated.baseDir=curated/en
@@ -91,4 +91,4 @@ Click Run anyway or Delete(DownArrow) -Keep Anyway
 This happens because the installer is newly published and has not yet built up Windows reputation.
 No system files are modified outside the = install directory.
 
-On first use, Windows Firewall make ask for permission for the Java HTML server to run. This server provides access to the HTML source files #anchor numbers to open file to exact location of quote, but does not need access through the firewall, so deny the firewall rule setup.
+On first use, Windows Firewall may ask for permission for the Java HTML server to run. This server provides access to the HTML source files #anchor numbers to open file to exact location of quote, but does not need access through the firewall, so deny the firewall rule setup.

@@ -2,7 +2,8 @@ package com.bahairesearch;
 
 import com.bahairesearch.config.AppConfig;
 import com.bahairesearch.config.ConfigLoader;
-import com.bahairesearch.corpus.CorpusIngestService;
+import com.bahairesearch.corpus.CorpusConnectionFactory;
+import com.bahairesearch.corpus.CorpusPaths;
 import com.bahairesearch.model.QuoteResult;
 import com.bahairesearch.model.ResearchReport;
 import com.bahairesearch.research.ResearchService;
@@ -29,6 +30,10 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -106,20 +111,36 @@ public class BahaiResearch extends Application {
         );
         authorCombo.setValue("All Authors");
 
-        // Title ComboBox — populated from manifest.csv at startup.
-        // To add a new compilation, update manifest.csv only — no code change needed.
+        // Title ComboBox — disabled until an author is chosen; titles loaded from DB for that author.
         Label titleLabel = new Label("Title:");
         ComboBox<String> titleCombo = new ComboBox<>();
         titleCombo.getItems().add("All Titles");
+        titleCombo.setValue("All Titles");
+        titleCombo.setDisable(true);
+        HBox.setHgrow(titleCombo, Priority.ALWAYS);
+
         try {
             appConfig = ConfigLoader.load();
-            List<String> titles = CorpusIngestService.readTitlesFromManifest(appConfig);
-            titleCombo.getItems().addAll(titles);
         } catch (Exception ignored) {
-            // Graceful: dropdown shows only "All Titles" if config not yet available
+            // Graceful: author-based title loading will be skipped if config unavailable
         }
-        titleCombo.setValue("All Titles");
-        HBox.setHgrow(titleCombo, Priority.ALWAYS);
+
+        // Selecting an author populates and enables the title combo from the DB.
+        // Reverting to "All Authors" clears and disables it.
+        authorCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null || "All Authors".equals(newVal)) {
+                titleCombo.getItems().setAll("All Titles");
+                titleCombo.setValue("All Titles");
+                titleCombo.setDisable(true);
+            } else {
+                List<String> titles = new ArrayList<>();
+                titles.add("All Titles");
+                titles.addAll(loadTitlesForAuthor(newVal));
+                titleCombo.getItems().setAll(titles);
+                titleCombo.setValue("All Titles");
+                titleCombo.setDisable(false);
+            }
+        });
 
         startLocalFileServer();
 
@@ -137,8 +158,8 @@ public class BahaiResearch extends Application {
 
         Button beginResearchButton = new Button("Begin Research →");
 
-        Label hintLabel = new Label("Tip: 2\u20133 key words give the sharpest results. Noise words (the, for, about) are ignored.");
-        hintLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #666666;");
+        Label hintLabel = new Label("Tip: 2\u20134 key words give the sharpest results. Noise words (the, for, about) are ignored.");
+        hintLabel.setStyle("-fx-font-size: 18px; -fx-text-fill: #666666;");
 
         HBox controls = new HBox(12, beginResearchButton, hintLabel);
         controls.setAlignment(Pos.CENTER_LEFT);
@@ -167,7 +188,7 @@ public class BahaiResearch extends Application {
         VBox root = new VBox(filterBar, inputLabel, topicInputArea, controls, summaryArea, outputScrollPane);
         root.setSpacing(12);
         root.setPadding(new Insets(14));
-        root.setStyle("-fx-font-size: 16px;");
+        root.setStyle("-fx-font-size: 18px;");
         // Adjust font size here for labels
 
         VBox.setVgrow(outputScrollPane, Priority.ALWAYS);
@@ -182,6 +203,29 @@ public class BahaiResearch extends Application {
         stage.show();
 
         Platform.runLater(topicInputArea::requestFocus);
+    }
+
+    private List<String> loadTitlesForAuthor(String author) {
+        if (appConfig == null) return List.of();
+        String sql = "SELECT DISTINCT title FROM documents "
+            + "WHERE lower(author) = lower(?) "
+            + "AND title IS NOT NULL AND trim(title) != '' "
+            + "ORDER BY title";
+        List<String> titles = new ArrayList<>();
+        CorpusPaths corpusPaths = CorpusPaths.fromConfig(appConfig);
+        try (Connection connection = CorpusConnectionFactory.open(corpusPaths);
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, author);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String t = rs.getString(1);
+                    if (t != null && !t.isBlank()) titles.add(t.trim());
+                }
+            }
+        } catch (Exception ignored) {
+            // DB may not exist yet on first launch before any search
+        }
+        return titles;
     }
 
     private void runResearch(
@@ -238,7 +282,7 @@ public class BahaiResearch extends Application {
         TextArea quoteLabel = new TextArea(quoteText);
         quoteLabel.setEditable(false);
         quoteLabel.setWrapText(true);
-        quoteLabel.setStyle("-fx-font-style: normal; -fx-font-size: 16px; -fx-font-weight: normal; -fx-background-color: transparent;");
+        quoteLabel.setStyle("-fx-font-style: normal; -fx-font-size: 18px; -fx-font-weight: normal; -fx-background-color: transparent;");
         quoteLabel.setPrefRowCount(5);
         quoteLabel.setMaxHeight(Double.MAX_VALUE);
 
@@ -249,7 +293,7 @@ public class BahaiResearch extends Application {
         String deepLink = buildDeepLink(relativeSourceUrl, locator);
 
         Hyperlink sourceLink = new Hyperlink("Source \u2197");
-        sourceLink.setStyle("-fx-font-size: 16px;");
+        sourceLink.setStyle("-fx-font-size: 18px;");
         sourceLink.setOnAction(e -> {
             try {
                 if (locator != null && locator.matches("\\d+")) {
